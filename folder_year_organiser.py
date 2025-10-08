@@ -14,39 +14,6 @@ from datetime import datetime
 from pathlib import Path
 
 
-def file_creation_date(file_path: str) -> datetime:
-    """
-    Get the creation date of a file.
-    
-    Args:
-        file_path: Path to the file
-        
-    Returns:
-        datetime object representing the file creation date
-    """
-    try:
-        # Get file stats
-        stat_info = os.stat(file_path)
-        
-        # On Windows, use st_ctime (creation time)
-        # On Unix, st_ctime is the last metadata change time, so we use st_birthtime if available
-        # Otherwise fall back to st_mtime (modification time)
-        if hasattr(stat_info, 'st_birthtime'):
-            # macOS and some BSD systems
-            timestamp = stat_info.st_birthtime
-        elif sys.platform == 'win32':
-            # Windows
-            timestamp = stat_info.st_ctime
-        else:
-            # Linux and others - use modification time as fallback
-            timestamp = stat_info.st_mtime
-            
-        return datetime.fromtimestamp(timestamp)
-    except Exception as e:
-        print(f"Error getting creation date for {file_path}: {e}", file=sys.stderr)
-        raise
-    
-
 def move_files(source_dir: str, copy: bool, dry_run: bool, full_path: bool) -> tuple[int, int]:
     """
     Move files to their respective year-based directories.
@@ -80,13 +47,10 @@ def move_files(source_dir: str, copy: bool, dry_run: bool, full_path: bool) -> t
                 new_file_path = source_path.parent / str(year) / relative_path
                 
                 if not dry_run:
-                    if full_path:
-                        print(f"Moving: {file_path} -> {new_file_path}")
-                    else:
-                        print(f"Moving: {file_path.relative_to(source_path.parent)} -> {new_file_path.relative_to(source_path.parent)}")
-
                     # Create destination directory if it doesn't exist
                     new_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    print_message(file_path, new_file_path, copy, full_path, source_path, dry_run)
 
                     if copy:
                         # Copy the file
@@ -97,17 +61,59 @@ def move_files(source_dir: str, copy: bool, dry_run: bool, full_path: bool) -> t
                     
                     moved_count += 1
                 else:
-                    if full_path:
-                        print(f"[Dry Run] Would move: {file_path} -> {new_file_path}")
-                    else:
-                        print(f"[Dry Run] Would move: {file_path.relative_to(source_path.parent)} -> {new_file_path.relative_to(source_path.parent)}")
-                
+                    print_message(file_path, new_file_path, copy, full_path, source_path, dry_run)
+
             except Exception as e:
                 print(f"Error processing {file_path}: {e}")
                 error_count += 1
 
     return moved_count, error_count
 
+
+def file_creation_date(file_path: str) -> datetime:
+    """
+    Get the creation date of a file.
+    
+    Args:
+        file_path: Path to the file
+        
+    Returns:
+        datetime object representing the file creation date
+    """
+    try:
+        # Get file stats
+        stat_info = os.stat(file_path)
+        
+        # On Windows, use st_ctime (creation time)
+        # On Unix, st_ctime is the last metadata change time, so we use st_birthtime if available
+        # Otherwise fall back to st_mtime (modification time)
+        if hasattr(stat_info, 'st_birthtime'):
+            # macOS and some BSD systems
+            timestamp = stat_info.st_birthtime
+        elif sys.platform == 'win32':
+            # Windows
+            timestamp = stat_info.st_ctime
+        else:
+            # Linux and others - use modification time as fallback
+            timestamp = stat_info.st_mtime
+            
+        return datetime.fromtimestamp(timestamp)
+    except Exception as e:
+        print(f"Error getting creation date for {file_path}: {e}", file=sys.stderr)
+        raise
+
+
+def print_message(file_path: Path, new_file_path: Path, copy: bool, full_path: bool, source_path: Path, dry_run: bool) -> None:
+    """Prints the move or copy message."""
+    action = "Copying" if copy else "Moving"
+
+    if dry_run:
+        action = f"[Dry Run] {action}"
+
+    if full_path:
+        print(f"{action}: {file_path} -> {new_file_path}")
+    else:
+        print(f"{action}: {file_path.relative_to(source_path.parent)} -> {new_file_path.relative_to(source_path.parent)}")
 
 if __name__ == '__main__':
     """Main entry point for the script."""
