@@ -1,5 +1,5 @@
-# disk-date-separator
-Quick utility that separates disks filled with various files into separate years with the same folder structure.
+# folder-year-organiser
+Quick utility that separates directories filled with various files into separate years with the same folder structure.
 
 ## Description
 
@@ -21,18 +21,18 @@ This Python script recursively searches a directory and organizes files by their
 
 ## Installation
 
-Simply clone this repository or download the `disk_date_separator.py` script.
+Simply clone this repository or download the `folder-year-organiser.py` script.
 
 ## Usage
 
 ### Basic usage:
 ```bash
-python3 disk_date_separator.py /path/to/directory
+python3 folder-year-organiser.py /path/to/directory
 ```
 
 ### Dry-run (preview without making changes):
 ```bash
-python3 disk_date_separator.py /path/to/directory --dry-run
+python3 folder-year-organiser.py /path/to/directory --dry-run
 ```
 
 ### Organize current directory:
@@ -41,7 +41,6 @@ python3 disk_date_separator.py .
 ```
 
 ## Example
-
 Given a directory structure like:
 ```
 my_files/
@@ -57,25 +56,27 @@ After running `python3 disk_date_separator.py my_files/`, the structure becomes:
 ```
 my_files/
 ├── 2022/
-│   └── photos/
-│       └── photo1.jpg
+│   └── my_files/
+│       ├── photos/
+│           └── photo1.jpg
 └── 2023/
-    ├── photos/
-    │   └── vacation/
-    │       └── photo2.jpg
-    └── documents/
-        └── report.pdf
+    └── my_files/
+        ├── photos/
+        │   └── vacation/
+        │       └── photo2.jpg
+        └── documents/
+            └── report.pdf
 ```
 
 ## Options
 
 - `directory` (positional, required): The directory to organize
+- `--copy` (optional): Copy instead of move
 - `--dry-run` (optional): Preview changes without moving files
+- `--full-path` (optional): Show full path instead of relative
 - `--help`: Show help message
 
 ## Notes
 
 - The script uses file creation time on Windows and macOS
 - On Linux, it falls back to modification time if creation time is not available
-- Year directories (4-digit numeric directories at root level) are automatically skipped to prevent re-processing already organized files
-- Empty directories are automatically removed after files are moved
