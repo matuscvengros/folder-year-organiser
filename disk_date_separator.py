@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-def get_file_creation_date(file_path):
+def file_creation_date(file_path: str) -> datetime:
     """
     Get the creation date of a file.
     
@@ -47,147 +47,107 @@ def get_file_creation_date(file_path):
         raise
 
 
-def organize_files(source_dir, dry_run=False):
+def aggregate_files(source_dir: str) -> list[Path]:
     """
-    Organize files in source_dir by creation year.
+    Aggregate paths of all files to be moved.
     
     Args:
-        source_dir: Root directory to organize
+        source_dir: Root directory to organise
+
+    Returns:
+        List of file paths to organise
+    """
+    try:
+        # Collect all files first (to avoid issues with moving files during iteration)
+        files_to_process = []
+        
+        for root, _, files in os.walk(source_dir):
+            root_path = Path(root)
+                
+            for filename in files:
+                file_path = root_path / filename # automatic path slashes OS specific given by Path() called previously
+                files_to_process.append(file_path)
+        
+        print(f"Found {len(files_to_process)} files to process")
+
+        return files_to_process
+    except Exception as e:
+        print(f"Error during file collection: {e}")
+        sys.exit(1) 
+    
+
+def move_files(source_dir: str, files: list[Path], copy: bool, dry_run: bool):
+    """
+    Move files to their respective year-based directories.
+
+    Args:
+        files_to_process: File paths to organise
         dry_run: If True, only print what would be done without actually moving files
     """
-    source_path = Path(source_dir).resolve()
-    
-    if not source_path.exists():
-        print(f"Error: Directory '{source_dir}' does not exist.", file=sys.stderr)
-        sys.exit(1)
-        
-    if not source_path.is_dir():
-        print(f"Error: '{source_dir}' is not a directory.", file=sys.stderr)
-        sys.exit(1)
-    
-    print(f"Organizing files in: {source_path}")
-    if dry_run:
-        print("DRY RUN: No files will be moved")
-    
-    # Collect all files first (to avoid issues with moving files during iteration)
-    files_to_process = []
-    
-    for root, dirs, files in os.walk(source_path):
-        root_path = Path(root)
-        
-        # Skip year directories at the root level (to avoid processing already organized files)
-        # Modify dirs in-place to prevent os.walk from descending into them
-        if root_path == source_path:
-            dirs_to_skip = [d for d in dirs if d.isdigit() and len(d) == 4]
-            for dir_name in dirs_to_skip:
-                print(f"Skipping year directory: {dir_name}")
-                dirs.remove(dir_name)
-            
-        for filename in files:
-            file_path = root_path / filename
-            files_to_process.append(file_path)
-    
-    print(f"Found {len(files_to_process)} files to process")
-    
     # Process each file
     moved_count = 0
     error_count = 0
     
-    for file_path in files_to_process:
+    for file_path in files:
         try:
+            source_path = Path(source_dir).resolve()
+
             # Get creation date
-            creation_date = get_file_creation_date(file_path)
-            year = creation_date.year
+            year = file_creation_date(file_path).year
             
             # Calculate relative path from source directory
             relative_path = file_path.relative_to(source_path)
             
             # Build new path: source_dir / year / relative_path
-            year_dir = source_path / str(year)
-            new_file_path = year_dir / relative_path
+            year_path = source_path.parent / str(year)
+            new_file_path = year_path / relative_path
             
-            # Skip if file is already in the correct location
-            if file_path == new_file_path:
-                continue
-            
-            print(f"Moving: {relative_path} -> {year}/{relative_path}")
+            print(f"Moving: {source_path}/{relative_path} -> {year}/{relative_path}")
             
             if not dry_run:
                 # Create destination directory if it doesn't exist
                 new_file_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Move the file
-                shutil.move(str(file_path), str(new_file_path))
+
+                if copy:
+                    # Copy the file
+                    shutil.copy2(str(file_path), str(new_file_path))
+                else:
+                    # Move the file
+                    shutil.move(str(file_path), str(new_file_path))
                 
             moved_count += 1
             
         except Exception as e:
-            print(f"Error processing {file_path}: {e}", file=sys.stderr)
+            print(f"Error processing {file_path}: {e}")
             error_count += 1
-    
-    print(f"\nCompleted!")
-    print(f"Files processed: {moved_count}")
-    if error_count > 0:
-        print(f"Errors encountered: {error_count}")
-    
-    # Clean up empty directories
-    if not dry_run:
-        cleanup_empty_dirs(source_path)
+
+    return moved_count, error_count
 
 
-def cleanup_empty_dirs(root_path):
-    """
-    Remove empty directories (except year directories and the root).
-    
-    Args:
-        root_path: Root directory to clean up
-    """
-    for root, dirs, files in os.walk(root_path, topdown=False):
-        root_dir = Path(root)
-        
-        # Don't remove the root directory or year directories at root level
-        if root_dir == root_path:
-            continue
-        if root_dir.parent == root_path and root_dir.name.isdigit() and len(root_dir.name) == 4:
-            continue
-            
-        # Try to remove directory if it's empty
-        try:
-            if not os.listdir(root_dir):
-                print(f"Removing empty directory: {root_dir.relative_to(root_path)}")
-                root_dir.rmdir()
-        except OSError:
-            pass
-
-
-def main():
+if __name__ == '__main__':
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
         description='Organize files by creation year while preserving directory structure.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=
+        """
 Examples:
-  %(prog)s /path/to/photos
-  %(prog)s /path/to/photos --dry-run
-  %(prog)s .
+%(prog)s /path/to/photos
+%(prog)s /path/to/photos --dry-run
+%(prog)s /path/to/photos --copy
+%(prog)s .
         """
     )
     
-    parser.add_argument(
-        'directory',
-        help='Directory to organize (files will be organized into year subdirectories)'
-    )
-    
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Show what would be done without actually moving files'
-    )
-    
+    parser.add_argument('directory', help='Directory to organize (files will be organized into year subdirectories)')
+    parser.add_argument('--copy', action='store_true', help='Copy instead of move files')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would be done without actually moving files')
     args = parser.parse_args()
     
-    organize_files(args.directory, dry_run=args.dry_run)
+    files = aggregate_files(args.directory)
+    moved_count, error_count = move_files(args.directory, files, args.copy, args.dry_run)
 
-
-if __name__ == '__main__':
-    main()
+    print(f"\nJob completed!")
+    print(f"Files processed: {moved_count}")
+    if error_count > 0:
+        print(f"Errors encountered: {error_count}")
