@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin python3
 """
 disk-date-separator: A utility to organize files by creation year.
 
