@@ -76,35 +76,42 @@ def aggregate_files(source_dir: str) -> list[Path]:
         sys.exit(1) 
     
 
-def move_files(source_dir: str, files: list[Path], copy: bool, dry_run: bool):
+def move_files(source_dir: str, files: list[Path], copy: bool, dry_run: bool, full_path: bool) -> tuple[int, int]:
     """
     Move files to their respective year-based directories.
 
     Args:
         files_to_process: File paths to organise
         dry_run: If True, only print what would be done without actually moving files
+
+    Returns:
+        Tuple of (number of files moved, number of errors)
     """
+    source_path = Path(source_dir).resolve()
+
     # Process each file
     moved_count = 0
     error_count = 0
     
     for file_path in files:
         try:
-            source_path = Path(source_dir).resolve()
+            file_path = file_path.resolve()
 
             # Get creation date
             year = file_creation_date(file_path).year
             
-            # Calculate relative path from source directory
-            relative_path = file_path.relative_to(source_path)
+            # Calculate relative path from parent of the source directory
+            relative_path = file_path.relative_to(source_path.parent)
             
-            # Build new path: source_dir / year / relative_path
-            year_path = source_path.parent / str(year)
-            new_file_path = year_path / relative_path
-            
-            print(f"Moving: {source_path}/{relative_path} -> {year}/{relative_path}")
+            # Build new path: year / source_dir / relative_path
+            new_file_path = source_path.parent / str(year) / relative_path
             
             if not dry_run:
+                if full_path:
+                    print(f"Moving: {file_path} -> {new_file_path}")
+                else:
+                    print(f"Moving: {file_path.relative_to(source_path.parent)} -> {new_file_path.relative_to(source_path.parent)}")
+
                 # Create destination directory if it doesn't exist
                 new_file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -115,7 +122,12 @@ def move_files(source_dir: str, files: list[Path], copy: bool, dry_run: bool):
                     # Move the file
                     shutil.move(str(file_path), str(new_file_path))
                 
-            moved_count += 1
+                moved_count += 1
+            else:
+                if full_path:
+                    print(f"[Dry Run] Would move: {file_path} -> {new_file_path}")
+                else:
+                    print(f"[Dry Run] Would move: {file_path.relative_to(source_path.parent)} -> {new_file_path.relative_to(source_path.parent)}")
             
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
@@ -135,17 +147,18 @@ Examples:
 %(prog)s /path/to/photos
 %(prog)s /path/to/photos --dry-run
 %(prog)s /path/to/photos --copy
-%(prog)s .
+%(prog)s
         """
     )
     
     parser.add_argument('directory', help='Directory to organize (files will be organized into year subdirectories)')
     parser.add_argument('--copy', action='store_true', help='Copy instead of move files')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done without actually moving files')
+    parser.add_argument('--full-path', action='store_true', help='Show full paths in the output instead of relatives')
     args = parser.parse_args()
     
     files = aggregate_files(args.directory)
-    moved_count, error_count = move_files(args.directory, files, args.copy, args.dry_run)
+    moved_count, error_count = move_files(args.directory, files, args.copy, args.dry_run, args.full_path)
 
     print(f"\nJob completed!")
     print(f"Files processed: {moved_count}")
